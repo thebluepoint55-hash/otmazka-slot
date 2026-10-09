@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Отмазки — концепции</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=Russo+One&family=Caveat:wght@500;700&family=Rubik+Mono+One&family=Rubik:wght@400;500;700;900&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--board:#141417;--board-2:#1f1f25;--line:#33333c;--board-ink:#ECEBF2;--board-dim:#8B8A96}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--board);color:var(--board-ink);font-family:Manrope,system-ui,sans-serif}
+body{min-height:100vh;padding:18px 24px 28px;display:flex;flex-direction:column;gap:16px}
+button{font:inherit;cursor:pointer}
+
+/* ---------- board chrome ---------- */
+.bar{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.bar h1{font-size:16px;font-weight:800;letter-spacing:-.01em;margin-right:auto}
+.seg{display:flex;gap:4px;padding:4px;border-radius:12px;background:var(--board-2);border:1px solid var(--line)}
+.seg button{position:relative;overflow:hidden;border:0;background:transparent;color:var(--board-dim);font-weight:700;font-size:13px;padding:8px 14px;border-radius:8px}
+.seg button.on{background:#2e2e37;color:var(--board-ink)}
+.seg button:focus-visible,.crop-btn:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.screens button::after{content:'';position:absolute;left:0;bottom:0;height:2px;width:0;background:var(--board-ink)}
+.screens button.on::after{animation:prog var(--d) linear forwards}
+.paused .screens button.on::after{animation:none;width:100%}
+@keyframes prog{to{width:100%}}
+.crop-btn{border:1px solid var(--line);background:var(--board-2);color:var(--board-dim);font-weight:700;font-size:13px;padding:9px 14px;border-radius:12px}
+.crop-btn[aria-pressed=true]{color:#fff;border-color:#777}
+.stage{flex:1;display:flex;justify-content:center;align-items:flex-start;min-height:0}
+.scaler{transform-origin:top center}
+.browser{width:1280px;border-radius:14px;overflow:hidden;background:#2b2b31;box-shadow:0 0 0 1px #3d3d46,0 50px 100px -30px #000}
+.chrome{height:38px;display:flex;align-items:center;gap:8px;padding:0 14px;background:#26262c}
+.chrome i{width:12px;height:12px;border-radius:50%;background:#45454e}
+.chrome i:nth-child(1){background:#ff5f57}.chrome i:nth-child(2){background:#febc2e}.chrome i:nth-child(3){background:#28c840}
+.url{margin:0 auto;transform:translateX(-30px);width:420px;height:24px;border-radius:7px;background:#1b1b20;color:#9a9aa6;font:500 12px Manrope;display:grid;place-items:center}
+.viewport{position:relative;width:1280px;height:760px;overflow:hidden}
+.site{position:absolute;inset:0;display:none;isolation:isolate}
+.site.active{display:block}
+.view{position:absolute;inset:0;opacity:0;visibility:hidden;transition:opacity .5s ease,visibility 0s .5s}
+.view.on{opacity:1;visibility:visible;transition:opacity .5s ease}
+.crop{position:absolute;inset:0;pointer-events:none;z-index:100;display:none}
+.crop div{position:absolute;top:0;bottom:0;left:50%;width:428px;margin-left:-214px;box-shadow:0 0 0 2000px #000a;outline:2px dashed #fff8}
+.crop span{position:absolute;top:10px;left:50%;transform:translateX(-50%);font:700 11px 'JetBrains Mono',monospace;color:#fff;background:#000a;padding:4px 8px;border-radius:6px;letter-spacing:.06em}
+.show-crop .crop{display:block}
+.note{max-width:1000px;margin:0 auto;text-align:center;color:#B9B8C4;font-size:14px;line-height:1.55}
+.note b{color:var(--board-ink)}
+.shake{animation:shake .38s cubic-bezier(.36,.07,.19,.97)}
+@keyframes shake{10%,90%{transform:translate(-1px,1px)}20%,80%{transform:translate(4px,-2px)}30%,50%,70%{transform:translate(-7px,3px) rotate(-.25deg)}40%,60%{transform:translate(7px,-2px) rotate(.25deg)}}
+@keyframes blink{50%{opacity:0}}
+
+/* ======================= A. СЛУЖЕБНАЯ ЗАПИСКА ======================= */
+.memo{--desk:#3C5649;--paper:#ECEFF2;--ink:#1D2E8A;--stamp:#D3263A;--rule:#BFCAD6;--graph:#24262D;--note:#F2DC6A;
+  background:radial-gradient(120% 90% at 50% 40%,transparent 50%,#0007),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .18 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E"),var(--desk);
+  color:var(--graph);font-family:'PT Serif',serif}
+.m-brand{position:absolute;top:26px;left:34px;font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.14em;color:#d9e4dc;opacity:.8}
+.m-sheet{position:absolute;left:50%;top:40px;bottom:-30px;width:620px;margin-left:-310px;transform:rotate(-.5deg);z-index:2;padding:34px 56px 0 88px;
+  background:linear-gradient(90deg,transparent 60px,#E99CA6 60px 61px,transparent 61px),repeating-linear-gradient(transparent 0 29px,var(--rule) 29px 30px) 0 20px,var(--paper);
+  box-shadow:0 2px 0 #fff inset,0 30px 60px -10px #000a,0 6px 14px #0004}
+.m-meta{font:600 10px 'IBM Plex Mono',monospace;letter-spacing:.08em;color:#6A7487;display:flex;justify-content:space-between}
+.m-h{font-weight:700;font-size:54px;line-height:1;margin:44px 0 20px;letter-spacing:-.015em}
+.m-h em{display:block;font-style:italic;font-weight:400;color:var(--ink)}
+.m-p{font-size:17px;line-height:30px;color:#3B3F4A;max-width:420px}
+.m-line{display:flex;gap:12px;font:400 12px/30px 'IBM Plex Mono',monospace;color:#6A7487;margin-top:0}
+.m-line i{font:italic 19px/30px 'PT Serif',serif;color:var(--ink);flex:1;white-space:nowrap;overflow:hidden;border-bottom:1px solid var(--ink)}
+.m-lines{margin-top:30px}
+.m-btn{margin-top:36px;height:60px;padding:0 30px;border:2px solid var(--graph);background:var(--graph);color:var(--paper);font:700 18px 'PT Serif',serif;border-radius:4px;box-shadow:5px 5px 0 var(--ink);transition:transform .1s,box-shadow .1s}
+.m-btn.press{transform:translate(5px,5px);box-shadow:0 0 0 var(--ink)}
+.m-foot{margin-top:22px;font:600 10.5px 'IBM Plex Mono',monospace;color:#6A7487;letter-spacing:.06em}
+.stamp{position:absolute;font-family:'Russo One',sans-serif;color:var(--stamp);border:4px solid var(--stamp);border-radius:10px;padding:8px 16px;text-align:center;line-height:1.05;letter-spacing:.05em;opacity:0;mix-blend-mode:multiply;pointer-events:none;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -2.2 1.6'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -2.2 1.6'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E")}
+.stamp.round{border-radius:50%;width:150px;height:150px;display:grid;place-items:center;font-size:15px;box-shadow:0 0 0 6px var(--paper) inset,0 0 0 9px var(--stamp) inset}
+.stamp.slam{animation:slam .42s cubic-bezier(.2,.9,.3,1.2) forwards}
+@keyframes slam{0%{opacity:0;transform:scale(2.8) rotate(var(--r,-12deg))}60%{opacity:.95;transform:scale(.94) rotate(var(--r,-12deg))}100%{opacity:.88;transform:scale(1) rotate(var(--r,-12deg))}}
+.m-s1{top:300px;right:46px;--r:-14deg}
+.m-clip{position:absolute;top:-18px;right:90px;width:26px;height:80px;z-index:3}
+.m-clip path{fill:none;stroke:#A9B0BA;stroke-width:3.5;stroke-linecap:round}
+.m-sticky{position:absolute;width:210px;padding:22px 20px;background:var(--note);font:500 25px/1.15 Caveat,cursive;color:#2b2a1f;box-shadow:0 18px 30px -12px #000a,0 2px 4px #0003;z-index:3}
+.m-sticky::before{content:'';position:absolute;top:-10px;left:50%;width:80px;height:24px;margin-left:-40px;background:#ffffff66;transform:rotate(-3deg)}
+.m-sticky.a{left:110px;top:150px;transform:rotate(-6deg)}
+.m-sticky.b{right:120px;top:420px;transform:rotate(5deg);background:#F7B9C4}
+.m-cup{position:absolute;right:130px;top:90px;width:170px;height:170px;border-radius:50%;border:9px solid #5a3a1c33;box-shadow:inset 0 0 0 3px #5a3a1c1f,0 0 0 2px #5a3a1c14;filter:blur(.6px);transform:rotate(20deg);border-right-color:#5a3a1c18}
+.m-pencil{position:absolute;left:150px;bottom:110px;width:280px;height:18px;transform:rotate(-22deg);border-radius:3px;background:linear-gradient(#f3c94f,#e2ac2c 50%,#c48c1c);box-shadow:0 12px 18px -6px #0008}
+.m-pencil::before{content:'';position:absolute;right:-34px;top:0;border-left:34px solid #e8c9a0;border-top:9px solid transparent;border-bottom:9px solid transparent}
+.m-pencil::after{content:'';position:absolute;left:-16px;top:0;width:16px;height:18px;background:#e98a9a;border-radius:3px 0 0 3px;box-shadow:inset -4px 0 0 #b9bcc2}
+/* memo payment */
+.m-h2{font:700 36px 'PT Serif',serif;margin:44px 0 8px}
+.m-fields{display:grid;grid-template-columns:1fr 1fr;gap:4px 28px;margin-top:24px}
+.m-f{font:400 11px/30px 'IBM Plex Mono',monospace;color:#6A7487}
+.m-f div{font:600 16px/30px 'IBM Plex Mono',monospace;color:var(--graph);border-bottom:1px dashed #8d99a8}
+.m-f.wide{grid-column:1/-1}
+.m-receipt{position:absolute;left:calc(50% + 330px);top:170px;width:270px;z-index:1;transform:translateX(-300px) rotate(0);transition:transform 1.1s cubic-bezier(.3,1,.3,1)}
+.m-receipt.out{transform:translateX(0) rotate(5deg);z-index:4}
+.m-receipt-in{background:#FBFBF8;padding:20px 18px 26px;font:400 12px/1.8 'IBM Plex Mono',monospace;color:#333;box-shadow:0 20px 30px -10px #0009;
+  -webkit-mask:linear-gradient(#000 0 0) top/100% calc(100% - 7px) no-repeat,radial-gradient(circle 5px at 50% 100%,transparent 5px,#000 5.5px) bottom/12px 7px repeat-x;
+  mask:linear-gradient(#000 0 0) top/100% calc(100% - 7px) no-repeat,radial-gradient(circle 5px at 50% 100%,transparent 5px,#000 5.5px) bottom/12px 7px repeat-x}
+.m-receipt-in b{display:flex;justify-content:space-between}
+.m-receipt .stamp{top:110px;left:40px;font-size:19px;--r:-16deg}
+/* memo generator */
+.m-to{font-size:15px;line-height:22px;text-align:right;margin-top:26px}
+.m-title{text-align:center;font:700 22px 'PT Serif',serif;letter-spacing:.3em;margin:28px 0 14px}
+.m-type{font:400 17px/30px 'IBM Plex Mono',monospace;color:var(--ink);min-height:210px}
+.car{display:inline-block;width:9px;height:18px;background:var(--ink);vertical-align:-3px;animation:blink .7s steps(1) infinite}
+.m-sign{display:flex;justify-content:space-between;align-items:end;font:400 13px 'IBM Plex Mono',monospace;color:#6A7487;margin-top:14px}
+.m-sign svg{width:120px;height:46px}
+.m-sign path{stroke:var(--ink);stroke-width:1.8;fill:none;stroke-dasharray:300;stroke-dashoffset:300}
+.m-sign.draw path{transition:stroke-dashoffset .9s ease-in-out;stroke-dashoffset:0}
+.m-s3{top:436px;left:250px;font-size:30px;padding:10px 22px;--r:-8deg}
+.m-again{margin-top:64px;height:52px;padding:0 26px;border:2px solid var(--graph);background:transparent;color:var(--graph);font:700 16px 'PT Serif',serif;border-radius:4px;opacity:0;transform:translateY(8px);transition:.4s}
+.m-again.in{opacity:1;transform:none}
+.m-cards{position:absolute;left:70px;top:110px;width:250px;display:flex;flex-direction:column;gap:18px;z-index:3}
+.m-card{background:#F7F5EE;padding:16px 18px;box-shadow:0 14px 24px -10px #0009;font:600 10px 'IBM Plex Mono',monospace;letter-spacing:.1em;color:#6A7487;
+  background-image:linear-gradient(transparent 30px,#E99CA6 30px 31px,transparent 31px)}
+.m-card:nth-child(1){transform:rotate(-2deg)}.m-card:nth-child(2){transform:rotate(1.5deg)}
+.m-card ul{list-style:none;margin-top:16px;font:400 18px/1.6 'PT Serif',serif;letter-spacing:0;color:var(--graph)}
+.m-card li.sel{position:relative;color:var(--ink)}
+.m-card li.sel::after{content:'';position:absolute;left:-8px;top:2px;width:118px;height:28px;border:2px solid var(--ink);border-radius:50%;transform:rotate(-3deg)}
+.m-dots{margin-top:14px;font-size:22px;letter-spacing:.2em;color:var(--ink)}
+
+/* ======================= B. ОТМАЗИНО ======================= */
+.slot{--plum:#1A0822;--gold:#F6C445;--gold-2:#B9862A;--cherry:#E3263B;--cream:#FFF0CF;--mute:#c9a9c4;
+  background:radial-gradient(80% 70% at 50% 10%,#4f1554,var(--plum) 70%);color:var(--cream);font-family:Rubik,sans-serif}
+.slot::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(90deg,#ffffff05 0 2px,transparent 2px 60px);pointer-events:none}
+.s-nav{position:absolute;top:0;left:0;right:0;height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 36px;z-index:5}
+.s-nav b{font:400 18px 'Rubik Mono One';color:var(--gold)}
+.s-tok{font:700 12px Rubik;letter-spacing:.12em;padding:9px 14px;border-radius:99px;background:#2a0b30;box-shadow:0 0 0 1.5px var(--gold-2) inset}
+.s-tok em{font-style:normal;color:var(--gold)}
+.s-center{position:absolute;left:50%;top:84px;width:640px;margin-left:-320px;display:flex;flex-direction:column;align-items:center}
+.s-sign{position:relative;padding:26px 30px 22px;border-radius:22px;background:linear-gradient(#5a1a3f,#2b0a2f);box-shadow:0 0 0 3px var(--gold-2),0 20px 50px #000a;width:100%;text-align:center}
+.s-sign::before,.s-sign::after{content:'';position:absolute;inset:-12px;border-radius:30px;padding:10px;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.s-sign::before{background:radial-gradient(circle,#6b4a1d 0 3.2px,transparent 4px) 0 0/16px 16px}
+.s-sign::after{background:radial-gradient(circle,#FFF4C2 0 3px,#ffcf5a88 3.8px,transparent 5.5px) 0 0/32px 16px;animation:chase .5s steps(2) infinite}
+@keyframes chase{to{background-position:32px 0}}
+.s-logo{font:400 68px 'Rubik Mono One';letter-spacing:-.02em;line-height:1;color:var(--gold);text-shadow:0 4px 0 var(--gold-2),0 0 30px #ffb84d88;animation:flick 4s infinite}
+@keyframes flick{0%,18%,22%,60%,100%{opacity:1}20%,61%{opacity:.45}}
+.s-sub{font:700 13px Rubik;letter-spacing:.4em;color:#ffd9e0;margin-top:10px}
+.s-p{font-size:18px;line-height:1.5;text-align:center;color:#f1d9e8;margin:30px 0 0;max-width:520px}
+.s-p b{color:var(--gold)}
+.s-mini{display:flex;gap:10px;margin-top:28px;padding:12px;border-radius:18px;background:#0e0312;box-shadow:0 0 0 3px var(--gold-2) inset}
+.s-mini div{width:110px;height:110px;border-radius:12px;background:linear-gradient(#fff,#ffeccc 45%,#e9cf9c);display:grid;place-items:center;font-size:52px;box-shadow:inset 0 8px 12px #0005,inset 0 -8px 12px #0004;animation:wob 1.6s ease-in-out infinite}
+.s-mini div:nth-child(2){animation-delay:.2s}.s-mini div:nth-child(3){animation-delay:.4s}
+@keyframes wob{50%{transform:translateY(-4px)}}
+.s-btn{margin-top:32px;width:440px;height:70px;border:0;border-radius:20px;background:linear-gradient(#ff4a5c,var(--cherry) 55%,#a3121f);color:#fff;font:400 20px 'Rubik Mono One';box-shadow:0 7px 0 #7a0c18,0 14px 30px #e3263b66;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 7px 0 #7a0c18,0 14px 46px #ff3b55aa}}
+.s-win{font:500 13px Rubik;color:var(--mute);margin-top:18px;letter-spacing:.04em}
+.s-side{position:absolute;top:120px;width:230px;height:500px;padding:18px;border-radius:18px;background:#22092a;box-shadow:0 0 0 1.5px #4f2251 inset;overflow:hidden}
+.s-side.l{left:44px}.s-side.r{right:44px}
+.s-side h4{font:700 11px Rubik;letter-spacing:.2em;color:var(--gold);margin-bottom:14px}
+.s-feed{height:430px;overflow:hidden;-webkit-mask:linear-gradient(#000 80%,transparent);mask:linear-gradient(#000 80%,transparent)}
+.s-feed ul{list-style:none;animation:feed 14s linear infinite}
+.s-side.r .s-feed ul{animation-duration:18s}
+.s-feed li{padding:11px 0;border-bottom:1px solid #ffffff10;font-size:13px;line-height:1.35;color:#f1d9e8}
+.s-feed li small{display:block;color:var(--gold);font-weight:700;font-size:11px;letter-spacing:.06em;margin-top:2px}
+@keyframes feed{to{transform:translateY(-50%)}}
+/* slot payment */
+.s-h2{font:400 40px 'Rubik Mono One';color:var(--gold);text-shadow:0 3px 0 var(--gold-2);text-align:center}
+.s-h2+p{color:var(--mute);margin-top:10px;font-size:16px}
+.s-packs{display:flex;gap:18px;margin-top:36px}
+.s-pack{position:relative;width:200px;padding:24px 20px;border-radius:20px;background:#2a0b30;box-shadow:0 0 0 1.5px #5d2a5f inset;text-align:center;transition:transform .2s}
+.s-pack b{display:block;font-size:20px}
+.s-pack small{display:block;font-size:12.5px;color:var(--mute);margin:6px 0 16px}
+.s-pack span{font:400 22px 'Rubik Mono One';color:var(--gold)}
+.s-pack.hot{background:#3d1240;box-shadow:0 0 0 2.5px var(--gold) inset,0 0 40px #f6c44533;transform:translateY(-8px)}
+.s-pack.hot::before{content:'ХИТ';position:absolute;top:-12px;left:50%;transform:translateX(-50%) rotate(-4deg);background:var(--cherry);font:900 11px Rubik;padding:4px 10px;border-radius:8px;letter-spacing:.1em}
+.s-pack.hot.press{transform:translateY(-8px) scale(.96)}
+.s-coinzone{position:relative;width:200px;height:170px;margin-top:20px}
+.s-coinslot{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);width:96px;height:16px;border-radius:8px;background:#000;box-shadow:0 0 0 4px var(--gold-2),0 0 0 8px #2a0b30}
+.s-coin{position:absolute;left:50%;top:0;width:70px;height:70px;margin-left:-35px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff6c9,var(--gold) 45%,var(--gold-2));box-shadow:inset 0 0 0 5px #e0a93a,0 8px 18px #0007;display:grid;place-items:center;font:400 24px 'Rubik Mono One';color:#8a5a12;opacity:0}
+.s-coin.drop{animation:coin 1.3s cubic-bezier(.5,0,.6,1) forwards}
+@keyframes coin{0%{opacity:1;transform:translateY(-10px) rotateY(0)}55%{transform:translateY(70px) rotateY(540deg)}75%{opacity:1;transform:translateY(80px) rotateY(630deg) scaleX(.2)}100%{opacity:0;transform:translateY(98px) rotateY(720deg) scaleX(.05)}}
+.s-count{font:400 20px 'Rubik Mono One';text-align:center}
+.s-count b{color:var(--gold);display:inline-block}
+.s-count b.pop{animation:pop .4s}
+@keyframes pop{50%{transform:scale(1.6);color:#fff}}
+/* slot generator */
+.s-machine{position:relative;width:600px;padding:18px 16px;border-radius:26px;background:linear-gradient(#6a1d48,#320c36);box-shadow:0 0 0 3px var(--gold-2),inset 0 2px 0 #ffffff22,0 30px 60px #000a}
+.s-cols{display:flex;font:700 11px Rubik;letter-spacing:.3em;color:var(--gold);margin-bottom:10px}
+.s-cols span{flex:1;text-align:center}
+.s-reels{display:flex;gap:8px;padding:8px;border-radius:16px;background:#0e0312}
+.s-reel{flex:1;height:204px;overflow:hidden;border-radius:10px;background:linear-gradient(#fff,#fff3dc 50%,#fff);-webkit-mask:linear-gradient(transparent,#000 24%,#000 76%,transparent);mask:linear-gradient(transparent,#000 24%,#000 76%,transparent)}
+.s-strip{will-change:transform}
+.s-strip.blur{filter:blur(3px)}
+.s-cell{height:68px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#3a1030;font:700 13px Rubik;line-height:1.15;text-align:center}
+.s-cell em{font-style:normal;font-size:32px;line-height:1.1}
+.s-payline{position:absolute;left:18px;right:18px;top:50%;height:3px;margin-top:12px;background:var(--cherry);box-shadow:0 0 10px var(--cherry);opacity:.8;pointer-events:none}
+.s-lever{position:absolute;right:-30px;top:50px;width:14px;height:110px;border-radius:7px;background:linear-gradient(90deg,#999,#eee,#888);transform-origin:50% 100%;transition:transform .25s ease-in}
+.s-lever::before{content:'';position:absolute;top:-22px;left:-11px;width:36px;height:36px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ff8a96,var(--cherry) 55%,#8c0d1a)}
+.s-lever.pull{transform:scaleY(-.6)}
+.s-jack{margin-top:22px;font:400 46px 'Rubik Mono One';color:var(--gold);text-shadow:0 0 24px #ffc84d,0 4px 0 var(--gold-2);opacity:0;transform:scale(.4)}
+.s-jack.in{animation:jack .7s cubic-bezier(.2,1.6,.4,1) forwards,flick 1s .7s infinite}
+@keyframes jack{to{opacity:1;transform:scale(1)}}
+.s-result{margin-top:16px;width:560px;padding:18px 22px;border-radius:18px;background:var(--cream);color:#2a0b30;font:500 18px/1.45 Rubik;text-align:center;opacity:0;transform:translateY(14px);transition:.5s cubic-bezier(.2,1,.3,1)}
+.s-result.in{opacity:1;transform:none}
+.s-rain{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:20}
+.s-rain i{position:absolute;top:-40px;width:28px;height:28px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff6c9,var(--gold) 50%,var(--gold-2));box-shadow:inset 0 0 0 3px #e0a93a;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(820px) rotateX(900deg)}}
+
+/* ======================= C. ОТМАЗ PRO ======================= */
+.ai{--pearl:#F3F4F8;--ink:#0D0F1A;--iris:#6D5BFF;--rose:#FF7AC6;--sky:#57D8FF;--slate:#8A90A6;--soft:#555b72;background:var(--pearl);color:var(--ink);font-family:Manrope,sans-serif}
+.a-nav{position:absolute;top:0;left:0;right:0;height:70px;display:flex;align-items:center;padding:0 40px;gap:36px;z-index:5}
+.a-logo{font-weight:800;font-size:19px;letter-spacing:-.03em}
+.a-links{display:flex;gap:28px;font-size:14px;font-weight:600;color:var(--soft);margin-right:auto}
+.a-pill{font:600 11px 'JetBrains Mono',monospace;padding:7px 11px;border-radius:99px;background:#fff;box-shadow:0 0 0 1px #0d0f1a14,0 2px 6px #0d0f1a0d;color:#444a60}
+.a-pill::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:#2fd17b;margin-right:7px;box-shadow:0 0 6px #2fd17b}
+.a-login{border:0;background:var(--ink);color:#fff;font-weight:700;font-size:14px;padding:10px 18px;border-radius:12px}
+.a-orbwrap{position:absolute;left:50%;top:84px;width:300px;height:280px;margin-left:-150px;display:grid;place-items:center}
+.a-orb{width:230px;height:230px;border-radius:50%;position:relative;overflow:hidden;box-shadow:0 50px 90px -30px #6d5bff99,inset 0 0 40px #fff8;animation:breathe 4s ease-in-out infinite}
+.a-orb::before{content:'';position:absolute;inset:-40%;background:conic-gradient(from 0deg,var(--iris),var(--rose),var(--sky),#b7a6ff,var(--iris));filter:blur(26px);animation:spin 6s linear infinite}
+.a-orb::after{content:'';position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffffee,#ffffff00 38%),radial-gradient(circle at 70% 80%,#ffffff55,transparent 40%)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes breathe{50%{transform:scale(1.05)}}
+.a-ring{position:absolute;width:290px;height:290px;border-radius:50%;border:1px solid #6d5bff2a;animation:ring 3s ease-out infinite}
+.a-ring+.a-ring{animation-delay:1.5s}
+@keyframes ring{from{transform:scale(.8);opacity:1}to{transform:scale(1.3);opacity:0}}
+.a-hero{position:absolute;left:50%;top:370px;width:900px;margin-left:-450px;text-align:center}
+.a-h{font-weight:800;font-size:62px;line-height:1.02;letter-spacing:-.045em}
+.a-h span{background:linear-gradient(90deg,var(--iris),var(--rose));-webkit-background-clip:text;background-clip:text;color:transparent}
+.a-p{font-size:18px;line-height:1.5;color:var(--soft);margin:18px auto 0;max-width:560px}
+.a-ctas{display:flex;gap:12px;justify-content:center;margin-top:28px}
+.a-btn{height:54px;padding:0 26px;border-radius:16px;border:0;background:var(--ink);color:#fff;font:700 16px Manrope;box-shadow:0 12px 26px -10px #0d0f1aaa}
+.a-btn::after{content:' →';color:#b7a6ff}
+.a-btn.ghost{background:#fff;color:var(--ink);box-shadow:0 0 0 1px #0d0f1a18}
+.a-btn.ghost::after{content:''}
+.a-trust{position:absolute;left:0;right:0;bottom:26px;display:flex;justify-content:center;gap:40px;font-weight:700;font-size:14px;color:#b0b4c4;letter-spacing:-.01em}
+.a-trust span:first-child{font-weight:500;color:var(--slate)}
+.a-rise{opacity:0;transform:translateY(16px);filter:blur(8px)}
+.on .a-rise{animation:rise .9s cubic-bezier(.2,.8,.2,1) forwards}
+@keyframes rise{to{opacity:1;transform:none;filter:blur(0)}}
+/* ai payment */
+.a-dim{position:absolute;inset:0;background:#0d0f1a00;transition:background .5s,backdrop-filter .5s;z-index:6}
+.a-dim.in{background:#0d0f1a59;backdrop-filter:blur(6px)}
+.a-modal{position:absolute;left:50%;top:50%;width:440px;margin:-250px 0 0 -220px;border-radius:28px;background:#fff;padding:28px;z-index:7;opacity:0;transform:translateY(40px) scale(.96);transition:.6s cubic-bezier(.2,.9,.2,1);box-shadow:0 40px 80px -20px #0d0f1a66}
+.a-modal.in{opacity:1;transform:none}
+.a-modal h3{font-size:20px;font-weight:800;letter-spacing:-.02em;margin-bottom:12px}
+.a-row{display:flex;justify-content:space-between;font-size:14px;padding:12px 0;border-bottom:1px solid #eef0f5;color:var(--soft)}
+.a-row b{color:var(--ink)}
+.a-total{display:flex;justify-content:space-between;align-items:baseline;margin:16px 0 8px}
+.a-total b{font-size:32px;font-weight:800;letter-spacing:-.04em}
+.a-scan{display:grid;place-items:center;height:120px}
+.a-scan svg{width:84px;height:84px}
+.a-scan .corner{stroke:var(--ink);stroke-width:4;fill:none;stroke-linecap:round;transition:stroke .3s}
+.a-scan .face{stroke:var(--slate);stroke-width:3;fill:none;stroke-linecap:round;transition:opacity .3s}
+.a-scan .ok{stroke:#2fd17b;stroke-width:5;fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:60;stroke-dashoffset:60}
+.a-scan.scanning svg{animation:scanp .6s ease-in-out 2}
+@keyframes scanp{50%{transform:scale(.88)}}
+.a-scan.done .face{opacity:0}
+.a-scan.done .corner{stroke:#2fd17b}
+.a-scan.done .ok{transition:stroke-dashoffset .5s .1s ease-out;stroke-dashoffset:0}
+.a-scantxt{text-align:center;font:600 13px Manrope;color:var(--slate)}
+/* ai generator */
+.a-side{position:absolute;left:0;top:0;bottom:0;width:260px;background:#ECEDF3;border-right:1px solid #0d0f1a0f;padding:22px 16px;display:flex;flex-direction:column}
+.a-new{margin:22px 0 22px;height:42px;border-radius:12px;border:0;background:#fff;box-shadow:0 0 0 1px #0d0f1a14;font-weight:700;font-size:13.5px;text-align:left;padding:0 14px}
+.a-side small{font:600 10.5px 'JetBrains Mono',monospace;color:var(--slate);letter-spacing:.08em;margin:0 0 8px 10px}
+.a-hist{list-style:none;font-size:13.5px;color:var(--soft)}
+.a-hist li{padding:9px 10px;border-radius:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.a-hist li.cur{background:#fff;color:var(--ink);font-weight:600}
+.a-plan{margin-top:auto;padding:14px;border-radius:14px;background:#fff;font-size:12.5px;color:var(--soft);box-shadow:0 0 0 1px #0d0f1a10}
+.a-plan b{display:block;color:var(--ink);font-size:14px;margin-bottom:2px}
+.a-main{position:absolute;left:260px;right:0;top:0;bottom:0}
+.a-main .a-nav{padding:0 32px;justify-content:space-between}
+.a-chat{position:absolute;left:50%;top:84px;width:700px;margin-left:-350px;display:flex;flex-direction:column;gap:16px}
+.a-me{align-self:flex-end;max-width:76%;background:var(--ink);color:#fff;padding:13px 17px;border-radius:20px 20px 5px 20px;font-size:15.5px;line-height:1.45;opacity:0;transform:translateY(10px) scale(.96);transition:.45s cubic-bezier(.22,1,.36,1)}
+.a-me.in{opacity:1;transform:none}
+.a-bot{display:flex;gap:14px;align-items:flex-start}
+.a-av{flex:none;width:34px;height:34px;border-radius:50%;background:conic-gradient(var(--iris),var(--rose),var(--sky),var(--iris));opacity:0;transition:.3s}
+.a-av.in{opacity:1}
+.a-av.think{animation:spin 1s linear infinite}
+.a-think{font:400 12.5px/1.9 'JetBrains Mono',monospace;color:var(--slate)}
+.a-think div{opacity:0;transform:translateX(-6px);transition:.35s}
+.a-think div.in{opacity:1;transform:none}
+.a-think div.done::before{content:'✓ ';color:#2fd17b}
+.a-think div:not(.done)::before{content:'◌ '}
+.a-ans{font-size:18px;line-height:1.55;margin-top:6px;min-height:28px;letter-spacing:-.01em}
+.a-ans .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--iris);margin-left:4px;animation:blink .6s steps(1) infinite}
+.a-res{display:flex;gap:12px;align-items:center;margin:14px 0 0 48px;opacity:0;transform:translateY(8px);transition:.45s}
+.a-res.in{opacity:1;transform:none}
+.a-meter{display:flex;align-items:center;gap:12px;padding:10px 16px 10px 10px;border-radius:16px;background:#fff;box-shadow:0 0 0 1px #0d0f1a10,0 8px 20px -10px #0d0f1a33}
+.a-meter svg{width:46px;height:46px;transform:rotate(-90deg)}
+.a-meter circle{fill:none;stroke-width:5}
+.a-meter .bg{stroke:#eceef4}
+.a-meter .fg{stroke:url(#ag);stroke-linecap:round;stroke-dasharray:113;stroke-dashoffset:113;transition:stroke-dashoffset 1.2s cubic-bezier(.2,.8,.2,1)}
+.a-meter b{font-size:20px;font-weight:800;letter-spacing:-.03em;display:block}
+.a-meter small{font-size:11.5px;color:var(--slate)}
+.a-chips{display:flex;gap:8px}
+.a-chips span{font:600 13px Manrope;padding:10px 14px;border-radius:99px;background:#fff;box-shadow:0 0 0 1px #0d0f1a14}
+.a-chips span.main{background:var(--ink);color:#fff;box-shadow:none}
+.a-input{position:absolute;left:50%;bottom:28px;width:700px;margin-left:-350px;height:58px;border-radius:18px;background:#fff;box-shadow:0 0 0 1px #0d0f1a14,0 12px 30px -16px #0d0f1a44;display:flex;align-items:center;padding:0 10px 0 20px;color:#a3a8ba;font-size:15px}
+.a-input i{margin-left:auto;width:38px;height:38px;border-radius:12px;background:var(--ink)}
+
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <h1>Генератор отмазок · концепции</h1>
+  <div class="seg concepts" role="tablist" aria-label="Концепция">
+    <button class="on">А. Служебная записка</button><button>Б. Отмазино</button><button>В. Отмаз Pro</button>
+  </div>
+  <div class="seg screens" role="tablist" aria-label="Экран">
+    <button>Главная</button><button>Оплата</button><button>Генератор</button>
+  </div>
+  <button class="crop-btn" aria-pressed="false">Кадр Reels 9:16</button>
+</header>
+
+<div class="stage"><div class="scaler"><div class="browser">
+  <div class="chrome"><i></i><i></i><i></i><div class="url">obyasnitelnaya.ru</div></div>
+  <div class="viewport">
+
+<!-- ================= A ================= -->
+<div class="site memo" data-key="memo" data-url="obyasnitelnaya.ru">
+  <div class="view">
+    <div class="m-brand">ОТМАЗКА · БЮРО ОБЪЯСНИТЕЛЬНЫХ</div>
+    <div class="m-cup"></div>
+    <div class="m-sticky a">Шеф опять спросит, почему опоздал. Придумать до 9:00!!</div>
+    <div class="m-pencil"></div>
+    <div class="m-sheet">
+      <svg class="m-clip" viewBox="0 0 26 80"><path d="M8 70V12a5 5 0 0 1 10 0v52a8 8 0 0 1-16 0V20"/></svg>
+      <div class="m-meta"><span>ФОРМА № ОТМ-1</span><span>КОД ПО ОКУД 0301024</span></div>
+      <h1 class="m-h">Объяснительная <em>за&nbsp;три секунды</em></h1>
+      <p class="m-p">Оправдания, которые подпишет любой начальник. Составлены по&nbsp;внутреннему регламенту.</p>
+      <div class="m-lines">
+        <div class="m-line">ПРИЧИНА:<i data-type="кот спрятал ключи от квартиры"></i></div>
+        <div class="m-line">ОПОЗДАНИЕ:<i data-type="40 минут"></i></div>
+      </div>
+      <button class="m-btn" tabindex="-1">Составить объяснительную · 149 ₽</button>
+      <div class="m-foot">ВЫДАНО 12 847 ОТМАЗОК · УВОЛЕНО 0</div>
+      <div class="stamp round m-s1">ПРОВЕРЕНО<br>ОТДЕЛОМ<br>КАДРОВ</div>
+    </div>
+  </div>
+  <div class="view">
+    <div class="m-brand">ОТМАЗКА · БЮРО ОБЪЯСНИТЕЛЬНЫХ</div>
+    <div class="m-cup"></div>
+    <div class="m-sticky a">149 ₽ — дешевле, чем депремирование</div>
+    <div class="m-receipt"><div class="m-receipt-in">
+      <div style="text-align:center">*** ООО «ОТМАЗКА» ***</div>
+      <div>КАССОВЫЙ ЧЕК № 0042</div>
+      <div>09.10.2026 08:57</div>
+      <div>- - - - - - - - - - - - - - - -</div>
+      <b><span>Отмазка премиум</span><span>149,00</span></b>
+      <b><span>НДС (нервы)</span><span>0,00</span></b>
+      <div>- - - - - - - - - - - - - - - -</div>
+      <b><span>ИТОГО</span><span>149,00</span></b>
+      <div style="text-align:center;margin-top:6px">Спасибо, что опоздали с нами</div>
+      <div class="stamp">ОПЛАЧЕНО</div>
+    </div></div>
+    <div class="m-sheet">
+      <div class="m-meta"><span>ПЛАТЁЖНОЕ ПОРУЧЕНИЕ</span><span>№ 0042</span></div>
+      <h2 class="m-h2">Квитанция на оплату</h2>
+      <p class="m-p">Услуга: составление объяснительной категории «Премиум», с печатью.</p>
+      <div class="m-fields">
+        <div class="m-f wide">НОМЕР КАРТЫ<div>4242 4242 4242 4242</div></div>
+        <div class="m-f">СРОК<div>12 / 29</div></div>
+        <div class="m-f">CVC<div>•••</div></div>
+        <div class="m-f wide">ПЛАТЕЛЬЩИК<div>Опоздавший А. А.</div></div>
+      </div>
+      <button class="m-btn m-pay" tabindex="-1">Оплатить 149 ₽</button>
+    </div>
+  </div>
+  <div class="view">
+    <div class="m-brand">ОТМАЗКА · БЮРО ОБЪЯСНИТЕЛЬНЫХ</div>
+    <div class="m-cards">
+      <div class="m-card">СИТУАЦИЯ<ul><li class="sel">Опоздание</li><li>Прогул</li><li>Сорван дедлайн</li><li>Уйти пораньше</li></ul></div>
+      <div class="m-card">УРОВЕНЬ НАГЛОСТИ<div class="m-dots">●●●○○</div></div>
+    </div>
+    <div class="m-sticky b">Шеф сегодня не в духе. Без шуток!</div>
+    <div class="m-sheet">
+      <div class="m-to">Начальнику отдела продаж<br><b>Петрову И. С.</b><br>от менеджера Смирнова А. А.</div>
+      <div class="m-title">ОБЪЯСНИТЕЛЬНАЯ</div>
+      <div class="m-type" data-text="Сегодня я опоздал на 40 минут, потому что кот закрыл меня в ванной и спрятал ключ. Переговоры с котом заняли больше времени, чем планировалось. Обязуюсь впредь не вступать с ним в конфликт."></div>
+      <div class="m-sign"><span>09.10.2026</span><svg viewBox="0 0 120 46"><path d="M6 32c10-18 16-24 18-13s-5 18 3 10 13-21 18-13-3 16 8 8 10-16 18-8 8 8 16 3 13-5 20-8"/></svg></div>
+      <button class="m-again" tabindex="-1">Составить ещё одну</button>
+      <div class="stamp m-s3">СОГЛАСОВАНО</div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= B ================= -->
+<div class="site slot" data-key="slot" data-url="otmazino.ru">
+  <div class="view">
+    <div class="s-nav"><b>ОТМАЗИНО</b><span class="s-tok">ЖЕТОНЫ: <em>0</em></span></div>
+    <aside class="s-side l"><h4>ПОСЛЕДНИЕ ВЫИГРЫШИ</h4><div class="s-feed"><ul class="feed-a"></ul></div></aside>
+    <aside class="s-side r"><h4>ЧТО ВЫПАДАЕТ ЧАЩЕ</h4><div class="s-feed"><ul class="feed-b"></ul></div></aside>
+    <div class="s-center">
+      <div class="s-sign"><div class="s-logo">ОТМАЗИНО</div><div class="s-sub">ДЖЕКПОТ — ВЫХОДНОЙ</div></div>
+      <p class="s-p">Дёрните рычаг, и автомат соберёт отмазку из трёх барабанов: <b>кто</b>, <b>что случилось</b> и <b>когда вы придёте</b>.</p>
+      <div class="s-mini"><div>🐈</div><div>🔑</div><div>⏰</div></div>
+      <button class="s-btn" tabindex="-1">ДЁРНУТЬ РЫЧАГ</button>
+      <div class="s-win">Сегодня выиграно 312 отгулов</div>
+    </div>
+  </div>
+  <div class="view">
+    <div class="s-nav"><b>ОТМАЗИНО</b><span class="s-tok">ЖЕТОНЫ: <em class="tok">0</em></span></div>
+    <div class="s-center" style="top:96px">
+      <div class="s-h2">КУПИТЕ ЖЕТОНЫ</div>
+      <p>Один жетон — один прокрут барабанов</p>
+      <div class="s-packs">
+        <div class="s-pack"><b>1 жетон</b><small>Разовое опоздание</small><span>49 ₽</span></div>
+        <div class="s-pack hot"><b>5 жетонов</b><small>Неделя прикрыта</small><span>149 ₽</span></div>
+        <div class="s-pack"><b>Безлимит</b><small>До пенсии</small><span>499 ₽</span></div>
+      </div>
+      <div class="s-coinzone"><div class="s-coin">₽</div><div class="s-coinslot"></div></div>
+      <div class="s-count">ЖЕТОНЫ: <b>0</b></div>
+    </div>
+  </div>
+  <div class="view">
+    <div class="s-nav"><b>ОТМАЗИНО</b><span class="s-tok">ЖЕТОНЫ: <em>4</em></span></div>
+    <aside class="s-side l"><h4>ПОСЛЕДНИЕ ВЫИГРЫШИ</h4><div class="s-feed"><ul class="feed-a"></ul></div></aside>
+    <aside class="s-side r"><h4>ЧТО ВЫПАДАЕТ ЧАЩЕ</h4><div class="s-feed"><ul class="feed-b"></ul></div></aside>
+    <div class="s-center" style="top:76px;width:600px;margin-left:-300px">
+      <div class="s-machine">
+        <div class="s-cols"><span>КТО</span><span>ЧТО СЛУЧИЛОСЬ</span><span>ИТОГ</span></div>
+        <div class="s-reels"><div class="s-reel"><div class="s-strip"></div></div><div class="s-reel"><div class="s-strip"></div></div><div class="s-reel"><div class="s-strip"></div></div></div>
+        <div class="s-payline"></div>
+        <div class="s-lever"></div>
+      </div>
+      <div class="s-jack">ДЖЕКПОТ!</div>
+      <div class="s-result">«Шеф, тёща застряла в&nbsp;лифте с&nbsp;моими ключами. Буду после обеда, держите оборону».</div>
+    </div>
+    <div class="s-rain"></div>
+  </div>
+</div>
+
+<!-- ================= C ================= -->
+<div class="site ai" data-key="ai" data-url="otmaz.ai">
+  <svg width="0" height="0" style="position:absolute"><defs><linearGradient id="ag" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6D5BFF"/><stop offset="1" stop-color="#FF7AC6"/></linearGradient></defs></svg>
+  <div class="view">
+    <nav class="a-nav"><span class="a-logo">отмаз.ai</span><span class="a-links"><span>Модели</span><span>Тарифы</span><span>Для бизнеса</span></span><span class="a-pill">ОТМАЗ-4 Turbo</span><button class="a-login" tabindex="-1">Войти</button></nav>
+    <div class="a-orbwrap"><div class="a-ring"></div><div class="a-ring"></div><div class="a-orb"></div></div>
+    <div class="a-hero">
+      <h1 class="a-h a-rise">Нейросеть, которая<br><span>врёт начальнику</span> за вас</h1>
+      <p class="a-p a-rise" style="animation-delay:.15s">Обучена на 14 млн объяснительных. Учитывает пробки, погоду и настроение шефа.</p>
+      <div class="a-ctas a-rise" style="animation-delay:.3s"><button class="a-btn" tabindex="-1">Попробовать Pro</button><button class="a-btn ghost" tabindex="-1">Смотреть демо</button></div>
+    </div>
+    <div class="a-trust a-rise" style="animation-delay:.45s"><span>Нам доверяют</span><span>Опоздуны</span><span>Прогульщики</span><span>Удалёнщики</span><span>Вечно больные</span></div>
+  </div>
+  <div class="view">
+    <nav class="a-nav"><span class="a-logo">отмаз.ai</span><span class="a-links"><span>Модели</span><span>Тарифы</span><span>Для бизнеса</span></span><span class="a-pill">ОТМАЗ-4 Turbo</span><button class="a-login" tabindex="-1">Войти</button></nav>
+    <div class="a-orbwrap"><div class="a-orb"></div></div>
+    <div class="a-hero"><h1 class="a-h">Нейросеть, которая<br><span>врёт начальнику</span> за вас</h1></div>
+    <div class="a-dim"></div>
+    <div class="a-modal">
+      <h3>Оформление подписки</h3>
+      <div class="a-row"><span>Тариф</span><b>Отмаз Pro</b></div>
+      <div class="a-row"><span>Лимит</span><b>Без ограничений</b></div>
+      <div class="a-row"><span>Модель</span><b>ОТМАЗ-4 Turbo</b></div>
+      <div class="a-total"><span style="color:#555b72;font-size:14px">К оплате</span><b>990 ₽/мес</b></div>
+      <div class="a-scan"><svg viewBox="0 0 74 74">
+        <path class="corner" d="M4 20V10a6 6 0 0 1 6-6h10M54 4h10a6 6 0 0 1 6 6v10M70 54v10a6 6 0 0 1-6 6H54M20 70H10a6 6 0 0 1-6-6V54"/>
+        <g class="face"><path d="M26 28v5M48 28v5M37 30v12h-4M28 50c5 5 13 5 18 0"/></g>
+        <path class="ok" d="M22 38l10 10 20-22"/>
+      </svg></div>
+      <div class="a-scantxt">Подтвердите оплату лицом</div>
+    </div>
+  </div>
+  <div class="view">
+    <aside class="a-side">
+      <span class="a-logo">отмаз.ai</span>
+      <button class="a-new" tabindex="-1">+ Новая отмазка</button>
+      <small>СЕГОДНЯ</small>
+      <ul class="a-hist"><li class="cur">Проспал планёрку</li><li>Не сдал отчёт к пятнице</li></ul>
+      <small style="margin-top:16px">НА ЭТОЙ НЕДЕЛЕ</small>
+      <ul class="a-hist"><li>Ушёл в 16:00 в пятницу</li><li>Забыл про созвон с клиентом</li><li>Не ответил в рабочем чате</li><li>Опоздал после обеда</li></ul>
+      <div class="a-plan"><b>Отмаз Pro</b>Безлимит · модель ОТМАЗ-4 Turbo</div>
+    </aside>
+    <div class="a-main">
+      <nav class="a-nav"><span style="font-weight:700;font-size:14px">Проспал планёрку</span><span class="a-pill">ОТМАЗ-4 Turbo</span></nav>
+      <div class="a-chat">
+        <div class="a-me">Проспал планёрку, шеф пишет «где ты?». Что ответить?</div>
+        <div class="a-bot"><div class="a-av"></div><div style="flex:1">
+          <div class="a-think"><div>Анализирую тон сообщения шефа</div><div>Сверяю с прогнозом пробок</div><div>Подбираю уровень драмы: умеренный</div></div>
+          <div class="a-ans" data-text="Доброе утро! Ночью у нас отключили свет — будильник не сработал, телефон сел. Уже еду, подключусь к планёрке через 15 минут. Прошу прощения за неудобства."></div>
+        </div></div>
+        <div class="a-res">
+          <div class="a-meter"><svg viewBox="0 0 44 44"><circle class="bg" cx="22" cy="22" r="18"/><circle class="fg" cx="22" cy="22" r="18"/></svg><div><b>97%</b><small>Правдоподобие</small></div></div>
+          <div class="a-chips"><span class="main">Отправить шефу</span><span>Драматичнее</span><span>Короче</span></div>
+        </div>
+      </div>
+      <div class="a-input">Опишите, что натворили…<i></i></div>
+    </div>
+  </div>
+</div>
+
+    <div class="crop"><div></div><span>КАДР REELS 9:16</span></div>
+  </div>
+</div></div></div>
+
+<p class="note"></p>
+
+<script>
+const NOTES = {
+  memo: '<b>Служебная записка.</b> Офисный стол, лист бумаги, стикеры. Текст печатается на машинке, сверху с грохотом падает печать «Согласовано». Смешно за счёт узнаваемости: объяснительную писал каждый.',
+  slot: '<b>Отмазино.</b> Однорукий бандит: рычаг, барабаны с инерцией, огни, дождь из монет. Отмазка собирается из комбинации «кто + что случилось + итог». Самый динамичный вариант в кадре.',
+  ai: '<b>Отмаз Pro.</b> Пародия на дорогой ИИ-стартап. Стерильный премиальный интерфейс для абсурдного продукта: нейросеть «думает», взвешивает настроение шефа и выдаёт ответ с процентом правдоподобия.'
+};
+const FEED_A = [['Ольга, Казань','ОТГУЛ'],['Денис, Пермь','ПРИШЁЛ К ОБЕДУ'],['Иван, Тверь','ШЕФ ПОВЕРИЛ'],['Марина, Омск','УДАЛЁНКА'],['Артём, Сочи','БОЛЬНИЧНЫЙ'],['Кирилл, Самара','БЕЗ ПОСЛЕДСТВИЙ'],['Аня, Уфа','ПЯТНИЦА С 15:00']];
+const FEED_B = [['🐈 Кот + 🔑 ключи','34% ПРОКРУТОВ'],['👵 Тёща + 🛗 лифт','21% ПРОКРУТОВ'],['🏢 Сосед + 💧 потоп','17% ПРОКРУТОВ'],['🕊️ Голубь + 🍕 пропуск','ЛЕГЕНДАРНАЯ'],['🛵 Курьер + 🛴 самокат','9% ПРОКРУТОВ']];
+const feedHTML = list => { const h = list.map(([a,b]) => `<li>${a}<small>${b}</small></li>`).join(''); return h + h; };
+document.querySelectorAll('.feed-a').forEach(u => u.innerHTML = feedHTML(FEED_A));
+document.querySelectorAll('.feed-b').forEach(u => u.innerHTML = feedHTML(FEED_B));
+
+const restart = (el, cls) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); };
+function typeInto(el, text, speed, later, start = 0, caret = true) {
+  el.innerHTML = caret ? '<span class="car"></span>' : '';
+  const node = document.createTextNode('');
+  el.prepend(node);
+  [...text].forEach((ch, i) => later(() => { node.data += ch; }, start + i * speed));
+  return start + text.length * speed;
+}
+function slamAndShake(stamp, site, later, at) {
+  later(() => { restart(stamp, 'slam'); later(() => restart(site, 'shake'), 200); }, at);
+}
+
+const REELS = [
+  [['🐈','Кот'],['👵','Тёща'],['🏢','Сосед'],['🛵','Курьер'],['🕊️','Голубь']],
+  [['🔑','Спрятал ключи'],['🛗','Застряла в лифте'],['💧','Затопил'],['🛴','Угнал самокат'],['🍕','Съел пропуск']],
+  [['⏰','+1 час'],['🍽️','После обеда'],['🏠','Из дома'],['🤒','Завтра'],['🚕','Уже еду']]
+];
+const TARGET = [1, 1, 1], CELL = 68, LOOPS = 4;
+
+const ANIMS = {
+  memo: [
+    (v, later, site) => {
+      const lines = v.querySelectorAll('.m-line i'), st = v.querySelector('.stamp');
+      lines.forEach(i => i.textContent = ''); st.classList.remove('slam');
+      let t = 500;
+      lines.forEach(i => { t = typeInto(i, i.dataset.type, 45, later, t, false) + 150; });
+      slamAndShake(st, site, later, t + 150);
+    },
+    (v, later, site) => {
+      const btn = v.querySelector('.m-pay'), r = v.querySelector('.m-receipt'), st = r.querySelector('.stamp');
+      r.classList.remove('out'); st.classList.remove('slam'); btn.textContent = 'Оплатить 149 ₽';
+      later(() => btn.classList.add('press'), 800);
+      later(() => { btn.classList.remove('press'); btn.textContent = 'Печатаем чек…'; r.classList.add('out'); }, 1000);
+      later(() => { btn.textContent = 'Оплачено'; }, 2200);
+      slamAndShake(st, site, later, 2300);
+    },
+    (v, later, site) => {
+      const box = v.querySelector('.m-type'), sign = v.querySelector('.m-sign'), st = v.querySelector('.stamp'), again = v.querySelector('.m-again');
+      sign.classList.remove('draw'); st.classList.remove('slam'); again.classList.remove('in');
+      const t = typeInto(box, box.dataset.text, 28, later, 400);
+      later(() => sign.classList.add('draw'), t + 100);
+      slamAndShake(st, site, later, t + 1100);
+      later(() => again.classList.add('in'), t + 1700);
+    }
+  ],
+  slot: [
+    () => {},
+    (v, later) => {
+      const coin = v.querySelector('.s-coin'), cnt = v.querySelector('.s-count b'), tok = v.querySelector('.tok'), hot = v.querySelector('.s-pack.hot');
+      coin.classList.remove('drop'); cnt.textContent = '0'; tok.textContent = '0';
+      later(() => hot.classList.add('press'), 700);
+      later(() => { hot.classList.remove('press'); restart(coin, 'drop'); }, 900);
+      [1,2,3,4,5].forEach((n, i) => later(() => { cnt.textContent = n; tok.textContent = n; restart(cnt, 'pop'); }, 2000 + i * 160));
+    },
+    (v, later, site) => {
+      const strips = v.querySelectorAll('.s-strip'), lever = v.querySelector('.s-lever');
+      const jack = v.querySelector('.s-jack'), res = v.querySelector('.s-result'), rain = v.querySelector('.s-rain');
+      jack.classList.remove('in'); res.classList.remove('in'); rain.innerHTML = '';
+      strips.forEach((s, i) => {
+        if (!s.children.length) {
+          let html = '';
+          for (let l = 0; l < LOOPS; l++) REELS[i].forEach(([e, w]) => html += `<div class="s-cell"><em>${e}</em>${w}</div>`);
+          s.innerHTML = html;
+        }
+        s.classList.remove('blur');
+        s.style.transition = 'none';
+        s.style.transform = `translateY(${-Math.floor(Math.random() * 5) * CELL + CELL}px)`;
+      });
+      later(() => lever.classList.add('pull'), 500);
+      later(() => lever.classList.remove('pull'), 800);
+      later(() => strips.forEach((s, i) => {
+        const idx = (LOOPS - 1) * 5 + TARGET[i], dur = 1.5 + i * .55;
+        s.classList.add('blur');
+        s.style.transition = `transform ${dur}s cubic-bezier(.12,.6,.22,1.06)`;
+        s.style.transform = `translateY(${-(idx - 1) * CELL}px)`;
+        later(() => s.classList.remove('blur'), dur * 720);
+      }), 700);
+      later(() => {
+        jack.classList.add('in'); restart(site, 'shake');
+        for (let k = 0; k < 40; k++) {
+          const c = document.createElement('i');
+          c.style.left = Math.random() * 100 + '%';
+          c.style.animationDuration = (1.4 + Math.random() * 1.2) + 's';
+          c.style.animationDelay = (Math.random() * .6) + 's';
+          rain.appendChild(c);
+        }
+      }, 3500);
+      later(() => res.classList.add('in'), 4100);
+    }
+  ],
+  ai: [
+    () => {},
+    (v, later) => {
+      const dim = v.querySelector('.a-dim'), modal = v.querySelector('.a-modal'), scan = v.querySelector('.a-scan'), txt = v.querySelector('.a-scantxt');
+      dim.classList.remove('in'); modal.classList.remove('in'); scan.classList.remove('scanning', 'done'); txt.textContent = 'Подтвердите оплату лицом';
+      later(() => { dim.classList.add('in'); modal.classList.add('in'); }, 400);
+      later(() => { scan.classList.add('scanning'); txt.textContent = 'Сканируем…'; }, 1500);
+      later(() => { scan.classList.add('done'); txt.textContent = 'Оплачено. Добро пожаловать в Pro'; }, 2800);
+    },
+    (v, later) => {
+      const me = v.querySelector('.a-me'), av = v.querySelector('.a-av'), steps = v.querySelectorAll('.a-think div');
+      const ans = v.querySelector('.a-ans'), res = v.querySelector('.a-res'), fg = v.querySelector('.fg');
+      [me, av, res].forEach(e => e.classList.remove('in')); av.classList.remove('think');
+      steps.forEach(s => s.classList.remove('in', 'done')); ans.innerHTML = ''; fg.style.strokeDashoffset = 113;
+      later(() => me.classList.add('in'), 300);
+      later(() => av.classList.add('in', 'think'), 900);
+      steps.forEach((s, i) => { later(() => s.classList.add('in'), 1100 + i * 650); later(() => s.classList.add('done'), 1600 + i * 650); });
+      const words = ans.dataset.text.split(' '), t0 = 3200;
+      let node;
+      later(() => { av.classList.remove('think'); ans.innerHTML = '<span class="dot"></span>'; node = document.createTextNode(''); ans.prepend(node); }, t0);
+      words.forEach((w, i) => later(() => { node.data += (i ? ' ' : '') + w; }, t0 + 100 + i * 75));
+      const t1 = t0 + 100 + words.length * 75;
+      later(() => { ans.querySelector('.dot')?.remove(); res.classList.add('in'); }, t1 + 200);
+      later(() => { fg.style.strokeDashoffset = 113 * .03; }, t1 + 400);
+    }
+  ]
+};
+const DURS = { memo: [5000, 4800, 11000], slot: [4500, 4600, 8000], ai: [4500, 5000, 9500] };
+
+/* controller */
+const sites = [...document.querySelectorAll('.site')];
+const cBtns = [...document.querySelectorAll('.concepts button')], sBtns = [...document.querySelectorAll('.screens button')];
+const url = document.querySelector('.url'), note = document.querySelector('.note');
+let ci = 0, si = 0, next, timers = [];
+const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+
+function show(c, s) {
+  ci = c; si = s;
+  clearTimeout(next); timers.forEach(clearTimeout); timers = [];
+  const site = sites[c], key = site.dataset.key;
+  sites.forEach((el, k) => el.classList.toggle('active', k === c));
+  cBtns.forEach((b, k) => b.classList.toggle('on', k === c));
+  url.textContent = site.dataset.url; note.innerHTML = NOTES[key];
+  const views = site.querySelectorAll('.view');
+  views.forEach((v, k) => v.classList.toggle('on', k === s));
+  sBtns.forEach((b, k) => { b.classList.remove('on'); if (k === s) { b.style.setProperty('--d', DURS[key][s] + 'ms'); void b.offsetWidth; b.classList.add('on'); } });
+  ANIMS[key][s](views[s], later, site);
+  next = setTimeout(() => show(c, (s + 1) % 3), DURS[key][s]);
+}
+cBtns.forEach((b, k) => b.addEventListener('click', () => show(k, 0)));
+sBtns.forEach((b, k) => b.addEventListener('click', () => show(ci, k)));
+
+const cropBtn = document.querySelector('.crop-btn'), stage = document.querySelector('.stage');
+cropBtn.addEventListener('click', () => { const on = stage.classList.toggle('show-crop'); cropBtn.setAttribute('aria-pressed', on); });
+
+const scaler = document.querySelector('.scaler');
+function fit() {
+  const w = stage.clientWidth, h = window.innerHeight - stage.getBoundingClientRect().top - 70;
+  const k = Math.min(1, w / 1280, h / 798);
+  scaler.style.transform = `scale(${k})`;
+  scaler.style.height = 798 * k + 'px'; scaler.style.width = 1280 * k + 'px';
+  scaler.firstElementChild.style.transform = '';
+}
+scaler.style.transformOrigin = 'top left';
+window.addEventListener('resize', fit); fit();
+show(0, 0);
+</script>
+</body>
+</html>
