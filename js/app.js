@@ -16,7 +16,7 @@
     tokens: 0, unlimited: false,
     pack: 5, paying: false,
     sit: 'late', spinning: false, spins: 0, last: [-1, -1, -1],
-    excuse: null, ticketNo: 4216, ticketOut: false
+    excuse: null, ticketNo: 4216, ticketOut: false, sends: 0
   };
 
   /* таймеры текущего экрана: при смене экрана все сбрасываются */
@@ -488,7 +488,7 @@
   const addMin = (time, m) => { const [h, mm] = time.split(':').map(Number); const t = h * 60 + mm + m; return `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; };
   function setStatus(txt, typing) { bossStatus.textContent = txt; bossStatus.classList.toggle('is-typing', !!typing); bossStatus.classList.toggle('dots', !!typing); }
 
-  /* Исход отправки — честная монетка 50/50, решается в момент отправки */
+  /* Исход отправки: первая отправка всегда прокатывает, вторая всегда нет, дальше честная монетка 50/50. Счёт сбрасывается клавишей R */
   const verdict = $('#verdict');
   const fillWho = (str, who) => str.replace(/\{Who\}/g, who[0].toUpperCase() + who.slice(1)).replace(/\{who\}/g, who);
   function bossMsg(text, time) {
@@ -509,7 +509,8 @@
   enter.chat = () => {
     if (!st.excuse) st.excuse = randomExcuse(st.sit);
     const ex = st.excuse, b = D.boss[ex.sit], myTime = addMin(b.time, 3), replyTime = addMin(myTime, 1);
-    const ok = Math.random() < 0.5;
+    const ok = st.sends === 0 ? true : st.sends === 1 ? false : Math.random() < 0.5;
+    st.sends++;
     const reply = pick(ok ? b.ok : b.fail).map(r => fillWho(r, ex.who || 'кот'));
     chatSide.classList.remove('is-in');
     verdict.className = 'verdict';
@@ -575,7 +576,7 @@
 
   function resetAll() {
     st.tokens = 0; st.unlimited = false; st.pack = 5; st.spins = 0; st.excuse = null; st.last = [-1, -1, -1];
-    st.ticketOut = false; st.spinning = false; st.ticketNo = 4216;
+    st.ticketOut = false; st.spinning = false; st.ticketNo = 4216; st.sends = 0;
     reels.forEach(r => r.halt());
     ticket.getAnimations().forEach(a => a.cancel());
     ticket.style.transform = 'translateY(-101%)';
