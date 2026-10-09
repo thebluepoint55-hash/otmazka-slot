@@ -65,15 +65,32 @@
       leave[prevName] && leave[prevName]();
     }
     st.screen = name;
+    html.dataset.screen = name;
     screens[name].classList.add('is-on');
     enter[name] && enter[name]();
   }
-  $$('[data-go]').forEach(b => b.addEventListener('click', () => { S.play('pop'); go(b.dataset.go); }));
+  /* долгое нажатие на логотип = клавиша R (режиссёрский сброс без клавиатуры, для телефона) */
+  let pressTimer = 0, longPressed = false;
+  const navLogo = $('.nav-logo');
+  navLogo.addEventListener('pointerdown', () => {
+    longPressed = false;
+    pressTimer = setTimeout(() => { longPressed = true; resetAll(); S.play('clack'); go('home'); }, 800);
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => navLogo.addEventListener(ev, () => clearTimeout(pressTimer)));
+  navLogo.addEventListener('contextmenu', e => e.preventDefault());
+  $$('[data-go]').forEach(b => b.addEventListener('click', () => {
+    if (b === navLogo && longPressed) { longPressed = false; return; }
+    S.play('pop'); go(b.dataset.go);
+  }));
 
   /* ================= 1. ГЛАВНАЯ ================= */
   $('#winFeed').innerHTML = (() => {
     const h = D.wins.map(([who, combo, res, ago]) =>
       `<li class="win"><span class="win-who">${who}</span><span class="win-ago">${ago} назад</span><span class="win-combo emo">${combo}</span><span class="win-res">${res}</span></li>`).join('');
+    return h + h;
+  })();
+  $('#mTicker').innerHTML = (() => {
+    const h = D.wins.map(([who, combo, res]) => `<span class="m-item"><span class="emo">${combo}</span>${who}<b>${res}</b></span>`).join('');
     return h + h;
   })();
   $('#odds').innerHTML = D.odds.map(([e, label, p], i) =>
@@ -280,7 +297,8 @@
     return {
       sit: sitKey,
       text: `${op} ${w} ${form(what.t, who.g)}. ${out.t}`,
-      combo: [who.e, what.e, out.e]
+      combo: [who.e, what.e, out.e],
+      who: who.l.toLowerCase()
     };
   }
   function randomExcuse(sitKey) { return buildExcuse(sitKey, [rnd(7), rnd(7), rnd(7)]); }
@@ -470,10 +488,31 @@
   const addMin = (time, m) => { const [h, mm] = time.split(':').map(Number); const t = h * 60 + mm + m; return `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; };
   function setStatus(txt, typing) { bossStatus.textContent = txt; bossStatus.classList.toggle('is-typing', !!typing); bossStatus.classList.toggle('dots', !!typing); }
 
+  /* Исход отправки — честная монетка 50/50, решается в момент отправки */
+  const verdict = $('#verdict');
+  const fillWho = (str, who) => str.replace(/\{Who\}/g, who[0].toUpperCase() + who.slice(1)).replace(/\{who\}/g, who);
+  function bossMsg(text, time) {
+    const m = document.createElement('div');
+    m.className = 'msg in enter';
+    m.innerHTML = `${esc(text)}<span class="meta">${time}</span>`;
+    chatBody.appendChild(m);
+  }
+  function typingOn() {
+    setStatus('печатает', true);
+    if ($('.typing-b', chatBody)) return;
+    const ty = document.createElement('div');
+    ty.className = 'typing-b'; ty.innerHTML = '<i></i><i></i><i></i>';
+    chatBody.appendChild(ty);
+  }
+  function typingOff() { $('.typing-b', chatBody)?.remove(); setStatus('в сети'); }
+
   enter.chat = () => {
     if (!st.excuse) st.excuse = randomExcuse(st.sit);
-    const ex = st.excuse, b = D.boss[ex.sit], myTime = addMin(b.time, 3);
+    const ex = st.excuse, b = D.boss[ex.sit], myTime = addMin(b.time, 3), replyTime = addMin(myTime, 1);
+    const ok = Math.random() < 0.5;
+    const reply = pick(ok ? b.ok : b.fail).map(r => fillWho(r, ex.who || 'кот'));
     chatSide.classList.remove('is-in');
+    verdict.className = 'verdict';
     setStatus('был недавно');
     field.textContent = '';
     chatBody.innerHTML = `<div class="day">Сегодня</div><div class="msg in">${b.msg}<span class="meta">${b.time}</span></div>`;
@@ -497,37 +536,42 @@
     t += 1200;
     later(() => { const c = $('.msg.out .chk', chatBody); if (c) { c.textContent = '✓✓'; c.classList.add('read'); } setStatus('в сети'); }, t);
     t += 800;
-    later(() => {
-      setStatus('печатает', true);
-      const ty = document.createElement('div');
-      ty.className = 'typing-b'; ty.innerHTML = '<i></i><i></i><i></i>';
-      chatBody.appendChild(ty);
-    }, t);
-    t += 2300;
-    later(() => {
-      $('.typing-b', chatBody)?.remove();
-      setStatus('в сети');
-      const m = document.createElement('div');
-      m.className = 'msg in enter';
-      m.innerHTML = `${pick(b.replies)}<span class="meta">${addMin(myTime, 1)}</span>`;
-      chatBody.appendChild(m);
-      S.play('ding');
-    }, t);
-    t += 900;
+
+    /* при провале шеф начинает печатать, замолкает и печатает снова */
+    if (!ok) {
+      later(typingOn, t); t += 1300;
+      later(typingOff, t); t += 900;
+    }
+    reply.forEach((msg, i) => {
+      later(typingOn, t);
+      t += Math.min(2600, 900 + msg.length * 32) + (i ? 0 : 400);
+      later(() => { typingOff(); bossMsg(msg, replyTime); S.play(i ? 'pop' : 'ding'); }, t);
+      t += 700;
+    });
+
+    t += 300;
     later(() => {
       const mine = $('.msg.out', chatBody);
-      if (mine) { const r = document.createElement('span'); r.className = 'react emo'; r.textContent = '👍'; mine.appendChild(r); S.play('pop'); }
+      if (mine) { const r = document.createElement('span'); r.className = 'react emo'; r.textContent = ok ? '👍' : '🤡'; mine.appendChild(r); }
+      verdict.innerHTML = ok ? 'ПРОКАТИЛО!' : 'НЕ<br>ПРОКАТИЛО';
+      verdict.className = 'verdict ' + (ok ? 'ok' : 'fail') + ' in';
+      S.play(ok ? 'win' : 'fail');
     }, t);
-    later(() => chatSide.classList.add('is-in'), t + 600);
+    later(() => chatSide.classList.add('is-in'), t + 900);
   };
   $('#chatAgain').addEventListener('click', () => { S.play('pop'); go('game'); });
 
   /* ================= звук, клавиши, сброс ================= */
-  const snd = $('#snd');
-  const syncSnd = () => snd.setAttribute('aria-pressed', S.on ? 'true' : 'false');
+  const snd = $('#snd'), mus = $('#mus');
+  const syncSnd = () => {
+    snd.setAttribute('aria-pressed', S.on ? 'true' : 'false');
+    mus.setAttribute('aria-pressed', S.on && S.music ? 'true' : 'false');
+  };
   snd.addEventListener('click', () => { S.toggle(); syncSnd(); });
+  const toggleMusic = () => { if (!S.on) { S.toggle(); if (!S.music) S.toggleMusic(); } else S.toggleMusic(); };
+  mus.addEventListener('click', () => { toggleMusic(); syncSnd(); });
   syncSnd();
-  ['pointerdown', 'keydown'].forEach(ev => window.addEventListener(ev, () => S.unlock(), { passive: true }));
+  ['pointerdown', 'touchend', 'keydown'].forEach(ev => window.addEventListener(ev, () => S.unlock(), { passive: true }));
 
   function resetAll() {
     st.tokens = 0; st.unlimited = false; st.pack = 5; st.spins = 0; st.excuse = null; st.last = [-1, -1, -1];
@@ -559,6 +603,7 @@
       case 'Digit3': case 'Numpad3': go('game'); break;
       case 'Digit4': case 'Numpad4': go('chat'); break;
       case 'KeyM': S.toggle(); syncSnd(); break;
+      case 'KeyB': toggleMusic(); syncSnd(); break;
       case 'Space': case 'Enter':
         if (e.target.closest && e.target.closest('button') && e.code === 'Enter') return;
         e.preventDefault();
